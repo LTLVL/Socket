@@ -3,4 +3,4 @@ project(3170104535Lab7)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(3170104535Lab7 main.cpp menu.cpp func.cpp)
+add_executable(3170104535Lab7 main.cpp func.cpp)
