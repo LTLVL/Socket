@@ -265,7 +265,6 @@ int init() {
 
 void receiveData(int fd) {
     while (!stop) {
-        this_thread::sleep_for(std::chrono::seconds(1));
         int flag = 1;
         memset(rec_buffer, 0, sizeof(rec_buffer));
 
@@ -344,9 +343,7 @@ void checkQueue(){
         }
     }
 
-    if (message.empty()) {
-        cout << "Not receive any packet yet" << endl;
-    } else {
+    if (!message.empty())  {
         cout << message << endl;
     }
 }
