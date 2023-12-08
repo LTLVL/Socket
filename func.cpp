@@ -95,7 +95,10 @@ void menu() {
                 }
                 //封装查询体
                 Packet to_send(fd, -1, sizeof(Packet), REQUIRE, TIME, nullptr);
-                send(fd, &to_send, sizeof(Packet), 0);
+                for (int j = 0; j < 100; j++) {
+                    send(fd, &to_send, sizeof(Packet), 0);
+                }
+
                 //等待响应
                 while (data_queue.empty());
 
@@ -247,6 +250,7 @@ int init() {
 }
 
 void receiveData(int fd) {
+    int count = 0;
     while (!stop) {
         memset(rec_buffer, 0, sizeof(rec_buffer));
 
@@ -284,6 +288,11 @@ void receiveData(int fd) {
             }
             received += bytes;
         } while (received < sizeof(Packet));
+        if (temp.header.operation == TIME) {
+            cout << "Receive time packet:" << count << endl;
+            count++;
+            continue;
+        }
 
         data_queue.push_front(temp);
 
