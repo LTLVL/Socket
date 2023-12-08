@@ -35,9 +35,8 @@ enum message_type {
 
 class PacketHead {
 public:
-    // 来源和目的文件描述符
-    int source_fd;
-    int destination_fd;
+    int source_id;
+    int destination_id;
     // data部分的内容长
     int length; //total length of data needed to pass;
     // 消息类型
@@ -46,9 +45,9 @@ public:
     operation_type operation;
 
     PacketHead() {}
-    PacketHead(int source_fd, int destination_fd, int length, message_type type, operation_type operation)
-            : source_fd(source_fd)
-            , destination_fd(destination_fd)
+    PacketHead(int source_id, int destination_id, int length, message_type type, operation_type operation)
+            : source_id(source_id)
+            , destination_id(destination_id)
             , length(length)
             , type(type)
             , operation(operation)
@@ -69,6 +68,6 @@ public:
     Packet(int sourece, int destination, int length, message_type type, operation_type op, unsigned char* in_data)
         : header(sourece, destination, length, type, op)
     {
-        memset(body.data, 0, 1024);
+        memset(body.data, 0, 256);
     }
 };

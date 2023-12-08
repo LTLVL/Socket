@@ -26,12 +26,13 @@ deque<Packet> data_queue;
 unsigned char rec_buffer[1024];
 bool stop = false;
 
+//10.192.124.127
 void menu() {
     bool isQuit = false; //是否退出
     bool isConnected = false; //是否已连接
     bool getList = false; //是否已查询列表
     int rec = 0;
-    int fd = init();
+    int fd;
     thread childthread;
     while (!isQuit) {
         showMenu();
@@ -42,6 +43,7 @@ void menu() {
                     cout << "Error input" << endl;
                     break;
                 }
+                fd = init();
                 const char *IP;
                 string temp;
                 int port;
@@ -78,7 +80,9 @@ void menu() {
                     cout << "Error input" << endl;
                     break;
                 }
-                close(fd);
+                //封装查询体
+                Packet to_send(fd, -1, sizeof(Packet), REQUIRE, CLOSE, nullptr);
+                send(fd, &to_send, sizeof(Packet), 0);
                 isConnected = false;
                 stop = true;
                 cout << "Disconnection success!" << endl;
@@ -90,7 +94,7 @@ void menu() {
                     break;
                 }
                 //封装查询体
-                Packet to_send(fd, -1, sizeof(Packet), REPLY, TIME, nullptr);
+                Packet to_send(fd, -1, sizeof(Packet), REQUIRE, TIME, nullptr);
                 send(fd, &to_send, sizeof(Packet), 0);
                 //等待响应
                 while (data_queue.empty());
@@ -120,16 +124,16 @@ void menu() {
                     break;
                 }
                 //封装查询体
-                Packet to_send(fd, -1, sizeof(Packet), REPLY, NAME, nullptr);
+                Packet to_send(fd, -1, sizeof(Packet), REQUIRE, NAME, nullptr);
                 send(fd, &to_send, sizeof(Packet), 0);
                 //等待响应
                 while (data_queue.empty());
 
-                string name = "";
+                char name[256];
 
                 for (auto iter = data_queue.begin(); iter != data_queue.end();) {
                     if (iter->header.operation == NAME) {
-                        name = *(char *) (iter->body.data);
+                        strncpy(name, iter->body.data, iter->header.length + 1);
                         data_queue.erase(iter);
                         break;
                     } else {
@@ -137,7 +141,7 @@ void menu() {
                     }
                 }
 
-                if (name == "") {
+                if (name[0] == 0) {
                     cout << "Not receive name packet yet" << endl;
                 } else {
                     cout << name << endl;
@@ -150,7 +154,7 @@ void menu() {
                     break;
                 }
                 //封装查询体
-                Packet to_send(fd, -1, sizeof(Packet), REPLY, ACTIVE_LIST, nullptr);
+                Packet to_send(fd, -1, sizeof(Packet), REQUIRE, ACTIVE_LIST, nullptr);
                 send(fd, &to_send, sizeof(Packet), 0);
                 //等待响应
                 while (data_queue.empty());
@@ -190,14 +194,21 @@ void menu() {
                     cout << "Query client list first" << endl;
                     break;
                 }
-                int tr_fd = -1;
-                int dest_fd = -1;
-                cout << "Type your fd" << endl;
-                cin >> tr_fd;
-                cout << "Type your destination fd" << endl;
-                cin >> dest_fd;
+                int tr_id = -1;
+                int dest_id = -1;
+                string msg;
+                string temp;
+                cout << "Type your id" << endl;
+                cin >> tr_id;
+                cout << "Type your destination id" << endl;
+                cin >> dest_id;
+                cout << "Type your message" << endl;
+                getline(cin, temp);
+                getline(cin, msg);
 
-                Packet to_send(tr_fd, dest_fd, sizeof(Packet), REPLY, MESSAGE, nullptr);
+
+                Packet to_send(tr_id, dest_id, sizeof(Packet), REQUIRE, MESSAGE, nullptr);
+                msg.copy(to_send.body.data, msg.size(), 0);
                 send(fd, &to_send, sizeof(Packet), 0);
                 break;
             }
@@ -245,14 +256,22 @@ void receiveData(int fd) {
         Packet temp;
         //读取数据
         do {
+
             bytes = read(fd, &temp, sizeof(Packet) - received);
             //收到错误信息
-            if(temp.header.type == ERROR){
+            if (temp.header.type == ERROR) {
                 cout << "Received an error message" << endl;
             }
-            if(temp.header.operation == MESSAGE){
+            if (temp.header.source_id == 0 && temp.header.destination_id == 0) {
+                continue;
+            }
+            if (temp.header.operation == CLOSE) {
+                close(fd);
+                return;
+            }
+            if (temp.header.operation == MESSAGE) {
                 string message = temp.body.data;
-                cout << "Receive message:\"" << message << "\" from " << temp.header.source_fd << endl;
+                cout << "Receive message:\"" << message << "\" from " << temp.header.source_id << endl;
             }
             if (bytes < 0) {
                 perror("Error reading from socket");
@@ -260,7 +279,7 @@ void receiveData(int fd) {
             }
             if (bytes == 0) {
                 //the server is closed
-                cout << "The server is down." <<endl;
+                cout << "The server is down." << endl;
                 break;
             }
             received += bytes;
