@@ -5,13 +5,15 @@
 #include <vector>
 #include <unistd.h>
 #include <string.h>
-#include "Global.h"
+#include "../Global.h"
 
 using namespace std;
 using namespace std;
 
 #define BUF_SIZE 4096
 #define QUEUE_SIZE 10
+
+int cnt = 0;
 
 // 服务端的socket
 int server_listen;
@@ -68,6 +70,7 @@ int main(){
     strncpy(serve.ip, ip_host, strlen(ip_host));
     serve.port = (int)ntohs(channel.sin_port);
     client_list.push_back(serve);
+    cout << "service already prepared! ip:" << serve.ip << " port:" << serve.port << endl;
 
     service_run = true;
     thread thread_child;
@@ -80,7 +83,10 @@ int main(){
 
         // 显示连接的客户端信息
         cout << "connected with client:" << endl;
-        cout << "IP/port: " << client_addr.sin_addr.s_addr << ":" << client_addr.sin_port << endl;
+        char ip_address[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &(client_addr.sin_addr), ip_address, INET_ADDRSTRLEN);
+        cout << "IP/port: " << ip_address << ":" << (int)ntohs(client_addr.sin_port) << endl;
+        // cout << "IP/port: " << client_addr.sin_addr.s_addr << ":" << client_addr.sin_port << endl;
         // 存入
         client temp;
         memset(&temp, 0, sizeof(temp));
@@ -153,7 +159,7 @@ void serve_child(int sa){
         // 检查是否出问题
         if( check < 0 ){
             cout << "receive from client " << sa << " error!" << endl;
-            exit(-1);
+            // exit(-1);
         }
         // 如果接受到为0，就是断开连接了
         // 手动设置包为close类型
@@ -172,6 +178,11 @@ bool conceal_package( int sa, Packet* receive ){
     // 先拿包的类型
     operation_type op = receive->header.operation;
 
+    // 输出客户端的请求
+    cout << "client: " << receive->header.source_id << endl;
+    cout << "operation: " << op << endl;
+    cout << "type: " << receive->header.type << endl;
+
     switch (op){
         // 申请时间
         // 返回时间的答复包
@@ -180,6 +191,8 @@ bool conceal_package( int sa, Packet* receive ){
             Packet* reply_back = new Packet(server_listen, sa, sizeof(now_time), REPLY, TIME, nullptr);
             strncpy(reply_back->body.data, (const char*)(&now_time), sizeof(now_time));
             ::send(sa, reply_back, sizeof(Packet), 0);
+            cnt ++;
+            cout << "send time package: " << cnt << endl;
             break;
         }
         // 申请名字
@@ -209,8 +222,8 @@ bool conceal_package( int sa, Packet* receive ){
         // 如果不是发送给自己的，就按dst发送，如果查不到dst，就返回error的答复
         case MESSAGE:{
             // 查找dst的目标
-            int src = receive->header.source_fd;
-            int dst = receive->header.destination_fd;
+            int src = receive->header.source_id;
+            int dst = receive->header.destination_id;
             int index = get_client_index(dst);
 
             // 如果没有，就报错
@@ -245,6 +258,9 @@ bool conceal_package( int sa, Packet* receive ){
         // 接受到接触连接的请求
         // 能接受到说明还在连接，则断开连接
         case CLOSE:{
+            // 发一个close确认包，解除客户端子线程阻塞
+            Packet* reply_back = new Packet(server_listen, sa, 0, REPLY, CLOSE, nullptr);
+            ::send(sa, reply_back, sizeof(Packet), 0);
             // 找到现在的连接，把他从client 中删去
             int index = get_client_index(sa);
             client_list.erase(client_list.begin()+index);
